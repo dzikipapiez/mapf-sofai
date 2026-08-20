@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-#SBATCH --job-name=prepare-policy
+#SBATCH --job-name=prepare-metacognitive
 #SBATCH --clusters=arc
 #SBATCH --partition=short
 #SBATCH --nodes=1

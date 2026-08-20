@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Prepare, run and aggregate sequential MAPF policy experiments."""
+"""Prepare, run and aggregate sequential MAPF metacognitive-module experiments."""
 
 from __future__ import annotations
 
@@ -16,26 +16,26 @@ import numpy as np
 import pandas as pd
 
 from mapf_anytime.anytime import run_sequence
-from mapf_anytime.policies.layered_v1 import (
-    LayeredPolicyV1,
+from mapf_anytime.metacognitive.layered_v1 import (
+    LayeredMetacognitiveModuleV1,
     TrainingConfig as V1TrainingConfig,
     prepare as prepare_layered_v1,
 )
-from mapf_anytime.policies.layered_variable_neighbourhood_v1 import (
-    LayeredVariableNeighbourhoodPolicyV1,
+from mapf_anytime.metacognitive.layered_variable_neighbourhood_v1 import (
+    LayeredVariableNeighbourhoodMetacognitiveModuleV1,
     TrainingConfig as VariableNeighbourhoodV1TrainingConfig,
     prepare as prepare_layered_variable_neighbourhood_v1,
 )
-from mapf_anytime.policies.lacam_lns import LaCAMLNSPolicy
-from mapf_anytime.policies.lacam_naive import LaCAMNaivePolicy
-from mapf_anytime.policies.naive_budget import NaiveBudgetPolicy
+from mapf_anytime.metacognitive.lacam_lns import LaCAMLNSMetacognitiveModule
+from mapf_anytime.metacognitive.lacam_naive import LaCAMNaiveMetacognitiveModule
+from mapf_anytime.metacognitive.naive_budget import NaiveBudgetMetacognitiveModule
 from mapf_anytime.problem import MapfProblem
 
 
 ######## PREPARE
 
 
-LEARNED_POLICIES = {"layered_v1", "layered_variable_neighbourhood_v1"}
+LEARNED_MODULES = {"layered_v1", "layered_variable_neighbourhood_v1"}
 
 
 def stage_problems(
@@ -69,13 +69,13 @@ def stage_problems(
 
 
 def default_early_stop(name: str) -> float | None:
-    return None if name in LEARNED_POLICIES else 10.0
+    return None if name in LEARNED_MODULES else 10.0
 
 
-def configure_learned_policy(policy, parameters: dict) -> None:
+def configure_learned_module(module, parameters: dict) -> None:
     percentile = float(
         parameters.get(
-            "survival_limit_percentile", policy.survival_limit_percentile
+            "survival_limit_percentile", module.survival_limit_percentile
         )
     )
     multiplier = float(parameters.get("survival_runtime_multiplier", 1.0))
@@ -83,8 +83,8 @@ def configure_learned_policy(policy, parameters: dict) -> None:
         raise ValueError("survival_limit_percentile must be between 0.5 and 1")
     if not math.isfinite(multiplier) or multiplier <= 0:
         raise ValueError("survival_runtime_multiplier must be positive and finite")
-    policy.survival_limit_percentile = percentile
-    policy.survival_runtime_multiplier = multiplier
+    module.survival_limit_percentile = percentile
+    module.survival_runtime_multiplier = multiplier
 
 
 def read_manifest_list(path: Path) -> list[Path]:
@@ -148,19 +148,21 @@ def prepare(config_path: Path, experiment: Path) -> None:
         for path in sequence
     }
 
-    policies = config["policies"]
-    if len({item["name"] for item in policies}) != len(policies):
-        raise ValueError("Each policy name must occur only once")
+    modules = config["metacognitive_modules"]
+    if len({item["name"] for item in modules}) != len(modules):
+        raise ValueError("Each metacognitive-module name must occur only once")
 
     tasks = []
-    for specification in policies:
+    for specification in modules:
         name = specification["name"]
         options = specification.get("prepare", {})
         model_dir = experiment / "models" / name
         if name in {"layered_v1", "layered_variable_neighbourhood_v1"}:
             dataset_value = options.get("dataset", config.get("dataset"))
             if dataset_value is None:
-                raise ValueError(f"The {name} policy requires a dataset")
+                raise ValueError(
+                    f"The {name} metacognitive module requires a dataset"
+                )
             dataset = (root / dataset_value).resolve()
             if name == "layered_v1":
                 training = V1TrainingConfig(
@@ -197,7 +199,7 @@ def prepare(config_path: Path, experiment: Path) -> None:
         }:
             pass
         else:
-            raise ValueError(f"Unknown policy: {name}")
+            raise ValueError(f"Unknown metacognitive module: {name}")
 
         runs = specification.get("runs", [{}])
         if not runs:
@@ -216,7 +218,7 @@ def prepare(config_path: Path, experiment: Path) -> None:
                 tasks.append(
                     {
                         "task": len(tasks),
-                        "policy": name,
+                        "metacognitive_module": name,
                         "parameters": parameters,
                         "repetition": repetition,
                     }
@@ -254,39 +256,39 @@ def run(
     results.mkdir(exist_ok=True)
 
     for task in selected:
-        name = task["policy"]
+        name = task["metacognitive_module"]
         parameters = task["parameters"]
         repetition = int(task["repetition"])
 
-        policy_types = {
-            "layered_v1": LayeredPolicyV1,
+        module_types = {
+            "layered_v1": LayeredMetacognitiveModuleV1,
             "layered_variable_neighbourhood_v1": (
-                LayeredVariableNeighbourhoodPolicyV1
+                LayeredVariableNeighbourhoodMetacognitiveModuleV1
             ),
-            "lacam_naive": LaCAMNaivePolicy,
-            "lacam_lns": LaCAMLNSPolicy,
-            "naive_budget": NaiveBudgetPolicy,
+            "lacam_naive": LaCAMNaiveMetacognitiveModule,
+            "lacam_lns": LaCAMLNSMetacognitiveModule,
+            "naive_budget": NaiveBudgetMetacognitiveModule,
         }
-        if name in policy_types:
+        if name in module_types:
             if "budget" not in parameters:
                 raise ValueError(f"A {name} run requires a budget")
-            policy = policy_types[name].load(
+            module = module_types[name].load(
                 experiment / "models" / name, seed=repetition
             )
-            if name in LEARNED_POLICIES:
-                configure_learned_policy(policy, parameters)
+            if name in LEARNED_MODULES:
+                configure_learned_module(module, parameters)
             early_stop = parameters.get(
                 "early_stop_seconds", default_early_stop(name)
             )
-            policy.early_stop_seconds = (
+            module.early_stop_seconds = (
                 None if early_stop is None else float(early_stop)
             )
-            policy_budget = float(parameters["budget"])
+            module_budget = float(parameters["budget"])
             hard_limit = max(
-                0.0, float(parameters.get("hard_limit", policy_budget))
+                0.0, float(parameters.get("hard_limit", module_budget))
             )
         else:
-            raise ValueError(f"Unknown policy: {name}")
+            raise ValueError(f"Unknown metacognitive module: {name}")
 
         problems = [
             MapfProblem.from_manifest(path)
@@ -294,7 +296,7 @@ def run(
         ]
         problems = stage_problems(problems, local_input_dir)
         started = time.perf_counter()
-        rows = run_sequence(policy, problems, policy_budget, hard_limit)
+        rows = run_sequence(module, problems, module_budget, hard_limit)
         wall_seconds = time.perf_counter() - started
         result = {
             **task,
@@ -326,7 +328,7 @@ def aggregate(experiment: Path) -> None:
         for row in result["rows"]:
             record = {
                 "task": result["task"],
-                "policy": result["policy"],
+                "metacognitive_module": result["metacognitive_module"],
                 "repetition": result["repetition"],
                 "task_wall_seconds": result["wall_seconds"],
                 **parameters,

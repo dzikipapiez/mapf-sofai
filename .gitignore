@@ -31,6 +31,8 @@ datasets/pogema/instances/
 datasets/pogema/maps/
 datasets/pogema/scen/
 notebooks/demo_output/
-policy_experiments/*
-!policy_experiments/example_movingai_experiment.json
+metacognitive_experiments/*
+!metacognitive_experiments/example_movingai_experiment.json
 benchmark_runs/
+release_assets/
+results/

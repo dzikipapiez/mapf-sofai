@@ -32,7 +32,7 @@ class S2Request:
     replan_time_limit: float = 10.0
 
 
-class Policy(Protocol):
+class MetacognitiveModule(Protocol):
     charge_feature_time: bool
     remaining_seconds: float
 

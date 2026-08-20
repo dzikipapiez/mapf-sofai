@@ -10,7 +10,7 @@ from .base import S1Request, S2Request, SequenceContext
 
 
 @dataclass
-class LaCAMLNSPolicy:
+class LaCAMLNSMetacognitiveModule:
     charge_feature_time = False
     early_stop_seconds: float | None = 10.0
     seed: int = 1
@@ -22,7 +22,7 @@ class LaCAMLNSPolicy:
         directory: Path,
         seed: int = 1,
         early_stop_seconds: float | None = 10.0,
-    ) -> LaCAMLNSPolicy:
+    ) -> LaCAMLNSMetacognitiveModule:
         del directory
         if early_stop_seconds is not None and early_stop_seconds <= 0:
             raise ValueError("early_stop_seconds must be positive or null")

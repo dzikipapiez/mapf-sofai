@@ -4,27 +4,27 @@ import time
 from typing import Iterable
 
 from .features import LACAM_FEATURES, analyze
-from .policies.base import Policy, SequenceContext
+from .metacognitive.base import MetacognitiveModule, SequenceContext
 from .problem import MapfProblem
 from .solvers import LaCAMConfig, LNSConfig, run_lacam, run_lns
 from .solvers.lacam import LaCAMResult
 
 
 def run_sequence(
-    policy: Policy,
+    module: MetacognitiveModule,
     problems: Iterable[MapfProblem],
-    policy_budget: float,
+    module_budget: float,
     hard_limit: float | None = None,
 ) -> list[dict]:
-    """Run one ordered sequence, reporting measured work back to its policy."""
+    """Run one ordered sequence, reporting work to its metacognitive module."""
     ordered = list(problems)
     rows = []
     hard_remaining = float("inf") if hard_limit is None else float(hard_limit)
-    policy.start_sequence(policy_budget, len(ordered))
+    module.start_sequence(module_budget, len(ordered))
     sequence_started = time.perf_counter()
     for position, problem in enumerate(ordered):
         row, hard_remaining = _run_instance(
-            policy,
+            module,
             problem,
             position,
             len(ordered) - position,
@@ -36,7 +36,7 @@ def run_sequence(
 
 
 def _run_instance(
-    policy: Policy,
+    module: MetacognitiveModule,
     problem: MapfProblem,
     position: int,
     instances_left: int,
@@ -44,27 +44,27 @@ def _run_instance(
     sequence_started: float,
 ) -> tuple[dict, float]:
     instance_started = time.perf_counter()
-    before = policy.remaining_seconds
+    before = module.remaining_seconds
 
     started = time.perf_counter()
     features = analyze(problem)
     static_feature_seconds = time.perf_counter() - started
-    if policy.charge_feature_time:
+    if module.charge_feature_time:
         hard_remaining = max(0.0, hard_remaining - static_feature_seconds)
-        policy.observe("static_features", static_feature_seconds)
+        module.observe("static_features", static_feature_seconds)
 
     context = SequenceContext(instances_left, position)
     started = time.perf_counter()
-    s1_request = policy.choose_s1(context, problem, features)
+    s1_request = module.choose_s1(context, problem, features)
     s1_decision_seconds = time.perf_counter() - started
     hard_remaining = max(0.0, hard_remaining - s1_decision_seconds)
-    policy.observe("s1_decision", s1_decision_seconds)
+    module.observe("s1_decision", s1_decision_seconds)
     s1_limit = min(max(0.0, s1_request.timeout), hard_remaining)
 
     if s1_limit > 0:
         s1 = run_lacam(problem, LaCAMConfig(s1_limit, anytime=s1_request.anytime))
         hard_remaining = max(0.0, hard_remaining - s1.wall_seconds)
-        policy.observe("s1", s1.wall_seconds)
+        module.observe("s1", s1.wall_seconds)
     else:
         s1 = LaCAMResult("skipped", 0.0)
 
@@ -73,9 +73,9 @@ def _run_instance(
         started = time.perf_counter()
         features = features.with_lacam(s1.solution)
         lacam_feature_seconds = time.perf_counter() - started
-        if policy.charge_feature_time:
+        if module.charge_feature_time:
             hard_remaining = max(0.0, hard_remaining - lacam_feature_seconds)
-            policy.observe("lacam_features", lacam_feature_seconds)
+            module.observe("lacam_features", lacam_feature_seconds)
 
     s2 = None
     s2_request = None
@@ -84,10 +84,10 @@ def _run_instance(
     if s1.solution is not None:
         context = SequenceContext(instances_left, position)
         started = time.perf_counter()
-        s2_request = policy.choose_s2(context, problem, features, s1.solution)
+        s2_request = module.choose_s2(context, problem, features, s1.solution)
         s2_decision_seconds = time.perf_counter() - started
         hard_remaining = max(0.0, hard_remaining - s2_decision_seconds)
-        policy.observe("s2_decision", s2_decision_seconds)
+        module.observe("s2_decision", s2_decision_seconds)
         if s2_request is not None:
             s2_limit = min(max(0.0, s2_request.timeout), hard_remaining)
             if s2_limit > 0:
@@ -106,7 +106,7 @@ def _run_instance(
                     ),
                 )
                 hard_remaining = max(0.0, hard_remaining - s2.wall_seconds)
-                policy.observe("s2", s2.wall_seconds)
+                module.observe("s2", s2.wall_seconds)
 
     metrics_started = time.perf_counter()
     final = s2.solution if s2 else s1.solution
@@ -131,7 +131,7 @@ def _run_instance(
         "instance_id": problem.name,
         "instances_left": instances_left,
         "budget_before": before,
-        "feature_time_charged": policy.charge_feature_time,
+        "feature_time_charged": module.charge_feature_time,
         "static_feature_seconds": static_feature_seconds,
         "lacam_feature_seconds": lacam_feature_seconds,
         "s1_decision_seconds": s1_decision_seconds,
@@ -188,11 +188,11 @@ def _run_instance(
     }
     metrics_seconds = time.perf_counter() - metrics_started
     hard_remaining = max(0.0, hard_remaining - metrics_seconds)
-    policy.observe("metrics", metrics_seconds)
+    module.observe("metrics", metrics_seconds)
     row.update(
         {
             "metrics_seconds": metrics_seconds,
-            "budget_after": policy.remaining_seconds,
+            "budget_after": module.remaining_seconds,
             "instance_wall_seconds": time.perf_counter() - instance_started,
             "sequence_elapsed_seconds": time.perf_counter() - sequence_started,
         }

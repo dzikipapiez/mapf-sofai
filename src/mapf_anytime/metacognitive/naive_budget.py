@@ -9,22 +9,26 @@ from ..solution import MapfSolution
 from .base import S1Request, S2Request, SequenceContext
 
 
+LACAM_LIMIT = 40.0
+
+
 @dataclass
-class LaCAMNaivePolicy:
+class NaiveBudgetMetacognitiveModule:
+    """Reserve 40 seconds per future LaCAM run and share the rest equally."""
+
     charge_feature_time = False
+    early_stop_seconds = 10.0
+    seed: int = 1
     remaining_seconds: float = 0.0
 
     @classmethod
-    def load(cls, directory: Path, seed: int = 1) -> LaCAMNaivePolicy:
-        del directory, seed
-        return cls()
+    def load(cls, directory: str | Path, seed: int = 1) -> "NaiveBudgetMetacognitiveModule":
+        return cls(seed)
 
     def start_sequence(self, budget: float, instances: int) -> None:
-        del instances
         self.remaining_seconds = max(0.0, float(budget))
 
     def observe(self, stage: str, seconds: float) -> None:
-        del stage
         self.remaining_seconds = max(0.0, self.remaining_seconds - seconds)
 
     def choose_s1(
@@ -33,8 +37,7 @@ class LaCAMNaivePolicy:
         problem: MapfProblem,
         features: FeatureSet,
     ) -> S1Request:
-        del context, problem, features
-        return S1Request(min(40.0, self.remaining_seconds))
+        return S1Request(min(LACAM_LIMIT, self.remaining_seconds))
 
     def choose_s2(
         self,
@@ -43,5 +46,17 @@ class LaCAMNaivePolicy:
         features: FeatureSet,
         solution: MapfSolution,
     ) -> S2Request | None:
-        del context, problem, features, solution
-        return None
+        future = context.instances_left - 1
+        limit = (
+            (self.remaining_seconds - future * LACAM_LIMIT) / future
+            if future
+            else self.remaining_seconds
+        )
+        if limit <= 0:
+            return None
+        return S2Request(
+            limit,
+            neighborhood_size=4,
+            seed=self.seed,
+            early_stop_seconds=self.early_stop_seconds,
+        )

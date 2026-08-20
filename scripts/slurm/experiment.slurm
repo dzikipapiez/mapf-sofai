@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-#SBATCH --job-name=mapf-policy
+#SBATCH --job-name=mapf-metacognitive
 #SBATCH --clusters=htc
 #SBATCH --partition=short
 #SBATCH --nodes=1

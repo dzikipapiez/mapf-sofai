@@ -61,8 +61,8 @@ class TrainingConfig:
     survival_limit_percentile: float = SURVIVAL_LIMIT_PERCENTILE
 
 
-class LayeredPolicyV1:
-    """Layered policy with a conservative survival ensemble and S1 floor."""
+class LayeredMetacognitiveModuleV1:
+    """Layered metacognitive module with a conservative survival ensemble and S1 floor."""
 
     charge_feature_time = True
     early_stop_seconds: float | None = None
@@ -99,7 +99,7 @@ class LayeredPolicyV1:
         self.remaining_seconds = max(0.0, self.remaining_seconds - seconds)
 
     @classmethod
-    def load(cls, directory: str | Path, seed: int = 1) -> "LayeredPolicyV1":
+    def load(cls, directory: str | Path, seed: int = 1) -> "LayeredMetacognitiveModuleV1":
         directory = Path(directory)
         parameters = json.loads(
             (directory / "parameters.json").read_text(encoding="utf-8")
@@ -119,13 +119,13 @@ class LayeredPolicyV1:
             survival.append(model)
         if parameters.get("quality_model_type") != "pooled_time_feature":
             raise ValueError(
-                "Policy artifacts use the retired per-horizon quality models; "
-                "prepare the policy again to train pooled time-feature models"
+                "Metacognitive-module artifacts use the retired per-horizon quality models; "
+                "prepare the metacognitive module again to train pooled time-feature models"
             )
         if parameters.get("quality_model_features") != list(LNS_FEATURES):
-            raise ValueError("Pooled LNS model features do not match the policy")
+            raise ValueError("Pooled LNS model features do not match the metacognitive module")
         if parameters.get("quality_model_horizons") != list(LNS_TIMES):
-            raise ValueError("Pooled LNS model horizons do not match the policy")
+            raise ValueError("Pooled LNS model horizons do not match the metacognitive module")
         paths = sorted((directory / "models").glob("lns_time_[0-4].json"))
         expected = int(parameters["quality_models"])
         if len(paths) != expected:
@@ -436,7 +436,7 @@ def _lns_rows(path: Path, neighborhood: int) -> pd.DataFrame:
         frame["lacam_seed"] = 0
     if "repetition" in frame:
         raise ValueError(
-            "Layered policy training requires averaged dataset.csv, "
+            "Layered metacognitive module training requires averaged dataset.csv, "
             "not repetition-level dataset_raw.csv"
         )
     required_columns = {

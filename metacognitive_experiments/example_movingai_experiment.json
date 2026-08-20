@@ -3,7 +3,7 @@
   "instance_list": "../datasets/movingai/instance_sets/layered_comprehensive.txt",
   "repetitions": 3,
   "seed": 1729,
-  "policies": [
+  "metacognitive_modules": [
     {
       "name": "layered_v1",
       "prepare": {"split_seed": 42, "neighborhood_size": 4},
