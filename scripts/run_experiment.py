@@ -16,15 +16,15 @@ import numpy as np
 import pandas as pd
 
 from mapf_anytime.anytime import run_sequence
-from mapf_anytime.metacognitive.layered_v1 import (
-    LayeredMetacognitiveModuleV1,
-    TrainingConfig as V1TrainingConfig,
-    prepare as prepare_layered_v1,
+from mapf_anytime.metacognitive.learnable_fixed import (
+    LearnableFixedMetacognitiveModule,
+    TrainingConfig as LearnableFixedTrainingConfig,
+    prepare as prepare_learnable_fixed,
 )
-from mapf_anytime.metacognitive.layered_variable_neighbourhood_v1 import (
-    LayeredVariableNeighbourhoodMetacognitiveModuleV1,
-    TrainingConfig as VariableNeighbourhoodV1TrainingConfig,
-    prepare as prepare_layered_variable_neighbourhood_v1,
+from mapf_anytime.metacognitive.learnable import (
+    LearnableMetacognitiveModule,
+    TrainingConfig as LearnableTrainingConfig,
+    prepare as prepare_learnable,
 )
 from mapf_anytime.metacognitive.lacam_lns import LaCAMLNSMetacognitiveModule
 from mapf_anytime.metacognitive.lacam_naive import LaCAMNaiveMetacognitiveModule
@@ -35,7 +35,7 @@ from mapf_anytime.problem import MapfProblem
 ######## PREPARE
 
 
-LEARNED_MODULES = {"layered_v1", "layered_variable_neighbourhood_v1"}
+LEARNED_MODULES = {"learnable_fixed", "learnable"}
 
 
 def stage_problems(
@@ -157,15 +157,15 @@ def prepare(config_path: Path, experiment: Path) -> None:
         name = specification["name"]
         options = specification.get("prepare", {})
         model_dir = experiment / "models" / name
-        if name in {"layered_v1", "layered_variable_neighbourhood_v1"}:
+        if name in LEARNED_MODULES:
             dataset_value = options.get("dataset", config.get("dataset"))
             if dataset_value is None:
                 raise ValueError(
                     f"The {name} metacognitive module requires a dataset"
                 )
             dataset = (root / dataset_value).resolve()
-            if name == "layered_v1":
-                training = V1TrainingConfig(
+            if name == "learnable_fixed":
+                training = LearnableFixedTrainingConfig(
                     split_seed=int(options.get("split_seed", 42)),
                     neighborhood_size=int(options.get("neighborhood_size", 4)),
                     jobs=int(options.get("jobs", 1)),
@@ -173,19 +173,19 @@ def prepare(config_path: Path, experiment: Path) -> None:
                         options.get("survival_limit_percentile", 0.8)
                     ),
                 )
-                prepare_layered_v1(
+                prepare_learnable_fixed(
                     dataset, model_dir, training,
                     exclude_instances=evaluation_ids,
                 )
             else:
-                training = VariableNeighbourhoodV1TrainingConfig(
+                training = LearnableTrainingConfig(
                     split_seed=int(options.get("split_seed", 42)),
                     jobs=int(options.get("jobs", 1)),
                     survival_limit_percentile=float(
                         options.get("survival_limit_percentile", 0.8)
                     ),
                 )
-                prepare_layered_variable_neighbourhood_v1(
+                prepare_learnable(
                     dataset, model_dir, training,
                     exclude_instances=evaluation_ids,
                 )
@@ -261,10 +261,8 @@ def run(
         repetition = int(task["repetition"])
 
         module_types = {
-            "layered_v1": LayeredMetacognitiveModuleV1,
-            "layered_variable_neighbourhood_v1": (
-                LayeredVariableNeighbourhoodMetacognitiveModuleV1
-            ),
+            "learnable_fixed": LearnableFixedMetacognitiveModule,
+            "learnable": LearnableMetacognitiveModule,
             "lacam_naive": LaCAMNaiveMetacognitiveModule,
             "lacam_lns": LaCAMLNSMetacognitiveModule,
             "naive_budget": NaiveBudgetMetacognitiveModule,

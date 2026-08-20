@@ -1,11 +1,11 @@
 {
   "dataset": "../datasets/movingai_final.csv",
-  "instance_list": "../datasets/movingai/instance_sets/layered_comprehensive.txt",
+  "instance_list": "../datasets/movingai/instance_sets/random_300_solved.txt",
   "repetitions": 3,
   "seed": 1729,
   "metacognitive_modules": [
     {
-      "name": "layered_v1",
+      "name": "learnable_fixed",
       "prepare": {"split_seed": 42, "neighborhood_size": 4},
       "runs": [
         {"budget": 200}, {"budget": 400}, {"budget": 600},
@@ -21,7 +21,7 @@
       ]
     },
     {
-      "name": "layered_variable_neighbourhood_v1",
+      "name": "learnable",
       "prepare": {"split_seed": 42},
       "runs": [
         {"budget": 200}, {"budget": 400}, {"budget": 600},

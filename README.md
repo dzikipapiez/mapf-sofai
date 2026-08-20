@@ -107,7 +107,8 @@ CSV datasets are intentionally excluded from Git.
 
 An experiment specification selects the training dataset, evaluation instances,
 repetitions, metacognitive modules and budgets. The included example evaluates
-both learned modules and all three nonlearnable baselines on MovingAI.
+`learnable_fixed` (fixed LNS neighbourhood), `learnable` (learned LNS
+neighbourhood selection) and all three nonlearnable baselines on MovingAI.
 
 Run preparation, every task and aggregation locally as one pipeline:
 
@@ -138,7 +139,7 @@ The most important specification fields are:
 | `dataset`                   | Dataset on which predictive models are trained.                                                                                                  |
 | `instance_list`             | Instances on which the systems are evaluated.                                                                                                    |
 | `repetitions`               | Number of times the experiment is repeated.                                                                                                      |
-| `metacognitive_modules`     | Module specifications, each containing a`name`, optional training settings in `prepare`, and one or more parameter dictionaries in `runs`. |
+| `metacognitive_modules`     | Module specifications, each containing a `name`, optional training settings in `prepare`, and one or more parameter dictionaries in `runs`. |
 | `runs[].budget`             | Shared time budget for the complete sequence.                                                                                                    |
 | `runs[].early_stop_seconds` | Optional MAPF-LNS stagnation limit.                                                                                                              |
 

@@ -25,9 +25,8 @@ from .base import S1Request, S2Request, SequenceContext
 
 
 LNS_TIMES = (1.0, 2.0, 5.0, 10.0, 20.0, 30.0, 50.0, 100.0)
-NEIGHBOURHOOD_SIZES = (4, 8, 16, 32)
-LNS_TIME_FEATURE = "lns_horizon_seconds"
-LNS_BASE_FEATURES = (*STATIC_FEATURES, *LACAM_FEATURES, "lns_neighborhood_size")
+LNS_TIME_FEATURE = "lns_time_seconds"
+LNS_BASE_FEATURES = (*STATIC_FEATURES, *LACAM_FEATURES)
 LNS_FEATURES = (*LNS_BASE_FEATURES, LNS_TIME_FEATURE)
 LACAM_HORIZON = 40
 SURVIVAL_FOLDS = 5
@@ -57,12 +56,13 @@ SURVIVAL_PARAMETERS = dict(
 @dataclass(frozen=True)
 class TrainingConfig:
     split_seed: int = 42
+    neighborhood_size: int = 4
     jobs: int = 1
     survival_limit_percentile: float = SURVIVAL_LIMIT_PERCENTILE
 
 
-class LayeredVariableNeighbourhoodMetacognitiveModuleV1:
-    """Variable-neighbour metacognitive module with a conservative survival ensemble."""
+class LearnableFixedMetacognitiveModule:
+    """Learned metacognitive module using a fixed LNS neighbourhood."""
 
     charge_feature_time = True
     early_stop_seconds: float | None = None
@@ -75,7 +75,7 @@ class LayeredVariableNeighbourhoodMetacognitiveModuleV1:
         average_lns_curve: np.ndarray,
         mean_lacam_runtime: float,
         horizon: int,
-        neighborhood_sizes: tuple[int, ...] = NEIGHBOURHOOD_SIZES,
+        neighborhood_size: int = 4,
         seed: int = 1,
         survival_limit_percentile: float = SURVIVAL_LIMIT_PERCENTILE,
         survival_runtime_multiplier: float = 1.0,
@@ -86,7 +86,7 @@ class LayeredVariableNeighbourhoodMetacognitiveModuleV1:
         self.average_lns_curve = average_lns_curve
         self.mean_lacam_runtime = mean_lacam_runtime
         self.horizon = horizon
-        self.neighborhood_sizes = neighborhood_sizes
+        self.neighborhood_size = neighborhood_size
         self.seed = seed
         self.survival_limit_percentile = survival_limit_percentile
         self.survival_runtime_multiplier = survival_runtime_multiplier
@@ -99,9 +99,7 @@ class LayeredVariableNeighbourhoodMetacognitiveModuleV1:
         self.remaining_seconds = max(0.0, self.remaining_seconds - seconds)
 
     @classmethod
-    def load(
-        cls, directory: str | Path, seed: int = 1
-    ) -> "LayeredVariableNeighbourhoodMetacognitiveModuleV1":
+    def load(cls, directory: str | Path, seed: int = 1) -> "LearnableFixedMetacognitiveModule":
         directory = Path(directory)
         parameters = json.loads(
             (directory / "parameters.json").read_text(encoding="utf-8")
@@ -119,19 +117,16 @@ class LayeredVariableNeighbourhoodMetacognitiveModuleV1:
             model = XGBClassifier()
             model.load_model(path)
             survival.append(model)
-        neighborhoods = tuple(parameters["neighborhood_sizes"])
-        if parameters.get("quality_model_type") != "pooled_time_neighborhood_feature":
+        if parameters.get("quality_model_type") != "pooled_time_feature":
             raise ValueError(
-                "Metacognitive-module artifacts use the retired per-action quality models; "
-                "prepare the metacognitive module again to train pooled time-neighbourhood models"
+                "Metacognitive-module artifacts use the retired per-horizon quality models; "
+                "prepare the metacognitive module again to train pooled time-feature models"
             )
         if parameters.get("quality_model_features") != list(LNS_FEATURES):
             raise ValueError("Pooled LNS model features do not match the metacognitive module")
         if parameters.get("quality_model_horizons") != list(LNS_TIMES):
             raise ValueError("Pooled LNS model horizons do not match the metacognitive module")
-        paths = sorted(
-            (directory / "models").glob("lns_time_neighborhood_[0-4].json")
-        )
+        paths = sorted((directory / "models").glob("lns_time_[0-4].json"))
         expected = int(parameters["quality_models"])
         if len(paths) != expected:
             raise FileNotFoundError(
@@ -153,7 +148,7 @@ class LayeredVariableNeighbourhoodMetacognitiveModuleV1:
             ].to_numpy(),
             parameters["mean_lacam_runtime_seconds"],
             parameters["lacam_horizon_seconds"],
-            neighborhoods,
+            parameters["neighborhood_size"],
             seed,
             parameters.get("survival_limit_percentile", SURVIVAL_LIMIT_PERCENTILE),
         )
@@ -232,85 +227,43 @@ class LayeredVariableNeighbourhoodMetacognitiveModuleV1:
         features: FeatureSet,
         solution: MapfSolution,
     ) -> S2Request | None:
-        base = {**features.static, **features.lacam}
-        candidates = pd.DataFrame(
-            [
-                {**base, "lns_neighborhood_size": neighborhood}
-                for neighborhood in self.neighborhood_sizes
-            ],
-            columns=LNS_BASE_FEATURES,
-        )
-        frame = _lns_design(candidates)
-        member_predictions = np.stack(
-            [
-                np.expm1(model.predict(frame)).reshape(
-                    len(self.neighborhood_sizes), len(LNS_TIMES)
-                )
-                for model in self.lns_models
-            ]
-        )
-        predicted_curves = member_predictions.mean(axis=0)
+        row = {
+            **features.static,
+            **{name: features.lacam[name] for name in LACAM_FEATURES},
+        }
+        frame = _lns_design(pd.DataFrame([row], columns=LNS_BASE_FEATURES))
         cap = features.lacam["lacam_initial_sod"] / features.static["lower_bound_soc"]
+        member_predictions = np.vstack(
+            [np.expm1(model.predict(frame)) for model in self.lns_models]
+        )
+        predictions = np.maximum.accumulate(
+            np.clip(
+                [0.0, *member_predictions.mean(axis=0)],
+                0.0,
+                cap,
+            )
+        )
         future = context.instances_left - 1
         spendable = max(0.0, self.remaining_seconds - future * self.mean_lacam_runtime)
-        skip = _allocation(
-            {0.0: 0.0},
+        limits = (0.0, *LNS_TIMES)
+        scores = _allocation(
+            {limit: predictions[index] for index, limit in enumerate(limits)},
             self.average_lns_curve,
             spendable,
             future,
-            (0.0,),
+            (limit for limit in limits if limit <= spendable),
         )
-        scores = {(None, 0.0): skip[0.0]}
-        predictions = {}
-        for neighborhood_index, neighborhood in enumerate(self.neighborhood_sizes):
-            curve = np.maximum.accumulate(
-                np.clip(
-                    predicted_curves[neighborhood_index],
-                    0.0,
-                    cap,
-                )
-            )
-            predictions[neighborhood] = curve
-            limits = tuple(seconds for seconds in LNS_TIMES if seconds <= spendable)
-            scores.update(
-                {
-                    (neighborhood, seconds): score
-                    for seconds, score in _allocation(
-                        dict(zip(LNS_TIMES, curve)),
-                        self.average_lns_curve,
-                        spendable,
-                        future,
-                        limits,
-                    ).items()
-                }
-            )
-        neighborhood, limit = max(
-            scores,
-            key=lambda action: (
-                scores[action],
-                -action[1],
-                -(action[0] or 0),
-            ),
-        )
-        if neighborhood is None:
+        limit = max(scores, key=lambda value: (scores[value], -value))
+        if not limit:
             return None
         return S2Request(
             limit,
-            neighborhood,
+            self.neighborhood_size,
             self.seed,
             early_stop_seconds=self.early_stop_seconds,
             info={
-                "predicted_improvement": float(
-                    predictions[neighborhood][LNS_TIMES.index(limit)]
-                ),
-                "scores": {
-                    (
-                        "skip"
-                        if candidate_neighborhood is None
-                        else f"n{candidate_neighborhood}:{seconds:g}"
-                    ): score
-                    for (candidate_neighborhood, seconds), score in scores.items()
-                },
+                "predicted_improvement": float(predictions[limits.index(limit)]),
+                "scores": scores,
             },
         )
 
@@ -321,7 +274,7 @@ def prepare(
     config: TrainingConfig = TrainingConfig(),
     exclude_instances: set[str] | None = None,
 ) -> None:
-    """Train five pooled time-and-neighbourhood quality models."""
+    """Train from an averaged, curve-preserving ``dataset.csv``."""
     output = Path(output)
     output.mkdir(parents=True, exist_ok=True)
     models = output / "models"
@@ -330,12 +283,8 @@ def prepare(
         raise ValueError("survival_limit_percentile must be between 0.5 and 1")
 
     dataset = Path(dataset)
-    lns = _lns_rows(dataset)
+    lns = _lns_rows(dataset, config.neighborhood_size)
     runtimes = _runtime_rows(dataset)
-    complete = lns.groupby(
-        ["instance_id", "lacam_seed"]
-    ).lns_neighborhood_size.nunique()
-    complete_keys = set(complete[complete == len(NEIGHBOURHOOD_SIZES)].index)
     excluded = set(exclude_instances or ())
     runtimes = runtimes[~runtimes.instance_id.astype(str).isin(excluded)].reset_index(
         drop=True
@@ -343,10 +292,9 @@ def prepare(
     runtime_keys = set(
         runtimes[["instance_id", "lacam_seed"]].itertuples(index=False, name=None)
     )
-    eligible_keys = complete_keys & runtime_keys
     lns = lns[
         [
-            key in eligible_keys
+            key in runtime_keys
             for key in lns[["instance_id", "lacam_seed"]].itertuples(
                 index=False, name=None
             )
@@ -369,12 +317,8 @@ def prepare(
     )
     split.to_csv(output / "instance_split.csv", index=False)
 
-    actual = {
-        (neighborhood, seconds): []
-        for neighborhood in NEIGHBOURHOOD_SIZES
-        for seconds in LNS_TIMES
-    }
-    predictions = {key: [] for key in actual}
+    actual = {seconds: [] for seconds in LNS_TIMES}
+    predictions = {seconds: [] for seconds in LNS_TIMES}
     for fold, (fit, holdout) in enumerate(folds):
         fit_ids = set(runtimes.iloc[fit].instance_id.astype(str))
         holdout_ids = set(runtimes.iloc[holdout].instance_id.astype(str))
@@ -388,32 +332,26 @@ def prepare(
             **LNS_PARAMETERS,
         )
         model.fit(_lns_design(fit_rows), np.log1p(_lns_targets(fit_rows)))
-        model.save_model(models / f"lns_time_neighborhood_{fold}.json")
-        fold_predictions = np.maximum(
-            0.0,
-            np.expm1(model.predict(_lns_design(holdout_rows))),
+        model.save_model(models / f"lns_time_{fold}.json")
+        fold_predictions = np.expm1(
+            model.predict(_lns_design(holdout_rows))
         ).reshape(len(holdout_rows), len(LNS_TIMES))
-        for neighborhood in NEIGHBOURHOOD_SIZES:
-            selected = holdout_rows.lns_neighborhood_size.eq(neighborhood).to_numpy()
-            for column, seconds in enumerate(LNS_TIMES):
-                key = neighborhood, seconds
-                actual[key].append(
-                    holdout_rows.loc[selected, f"target_{seconds:g}"].to_numpy()
-                )
-                predictions[key].append(fold_predictions[selected, column])
+        target_cap = (
+            holdout_rows.lacam_initial_sod / holdout_rows.lower_bound_soc
+        ).to_numpy()[:, None]
+        fold_predictions = np.clip(fold_predictions, 0.0, target_cap)
+        for column, seconds in enumerate(LNS_TIMES):
+            actual[seconds].append(holdout_rows[f"target_{seconds:g}"].to_numpy())
+            predictions[seconds].append(fold_predictions[:, column])
 
     lns_metrics = {}
-    for neighborhood in NEIGHBOURHOOD_SIZES:
-        neighborhood_metrics = {}
-        for seconds in LNS_TIMES:
-            key = neighborhood, seconds
-            observed = np.concatenate(actual[key])
-            predicted = np.concatenate(predictions[key])
-            neighborhood_metrics[f"{seconds:g}"] = {
-                "mae": float(mean_absolute_error(observed, predicted)),
-                "rmse": float(np.sqrt(mean_squared_error(observed, predicted))),
-            }
-        lns_metrics[str(neighborhood)] = neighborhood_metrics
+    for seconds in LNS_TIMES:
+        observed = np.concatenate(actual[seconds])
+        predicted = np.concatenate(predictions[seconds])
+        lns_metrics[f"{seconds:g}"] = {
+            "mae": float(mean_absolute_error(observed, predicted)),
+            "rmse": float(np.sqrt(mean_squared_error(observed, predicted))),
+        }
 
     columns = [*STATIC_FEATURES, "time_step"]
     survival_targets, probabilities = [], []
@@ -446,7 +384,12 @@ def prepare(
     pd.DataFrame(
         {"seconds": np.arange(horizon + 1), "termination_probability": cdf}
     ).to_csv(output / "population_lacam_cdf.csv", index=False)
-    average_lns = _average_best_curve(lns)
+    complete_curves = [
+        curve[:101] for curve in lns.improvement_curve if len(curve) >= 101
+    ]
+    if not complete_curves:
+        raise ValueError("No complete 0..100-second LNS curves")
+    average_lns = np.maximum.accumulate(np.mean(complete_curves, axis=0))
     pd.DataFrame(
         {"seconds": np.arange(len(average_lns)), "average_improvement": average_lns}
     ).to_csv(output / "average_lns_improvement.csv", index=False)
@@ -458,13 +401,13 @@ def prepare(
             "mean_lacam_runtime_seconds": float(
                 runtimes.loc[solved, "lacam_runtime_seconds"].mean()
             ),
-            "neighborhood_sizes": list(NEIGHBOURHOOD_SIZES),
+            "neighborhood_size": config.neighborhood_size,
             "objective": "expected number of solved instances",
             "training_domain": domain,
             "split_protocol": "stratified",
             "lns_hyperparameters": LNS_PARAMETERS,
             "survival_models": SURVIVAL_FOLDS,
-            "quality_model_type": "pooled_time_neighborhood_feature",
+            "quality_model_type": "pooled_time_feature",
             "quality_model_features": list(LNS_FEATURES),
             "quality_model_horizons": list(LNS_TIMES),
             "quality_models": SURVIVAL_FOLDS,
@@ -487,25 +430,26 @@ def prepare(
     )
 
 
-def _lns_rows(path: Path) -> pd.DataFrame:
+def _lns_rows(path: Path, neighborhood: int) -> pd.DataFrame:
     frame = pd.read_csv(path)
     if "lacam_seed" not in frame:
         frame["lacam_seed"] = 0
     if "repetition" in frame:
         raise ValueError(
-            "Layered metacognitive module training requires averaged dataset.csv, "
+            "Learnable-fixed training requires averaged dataset.csv, "
             "not repetition-level dataset_raw.csv"
         )
     required_columns = {
         "lns_repetitions",
         "lns_successful_repetitions",
         "lns_best_sod_by_second",
+        "lns_neighborhood_size",
         *LNS_BASE_FEATURES,
     }
     missing = sorted(required_columns - set(frame))
     if missing:
         raise KeyError(f"{path} is missing {missing}")
-    frame = frame[frame.lns_neighborhood_size.isin(NEIGHBOURHOOD_SIZES)].copy()
+    frame = frame[frame.lns_neighborhood_size == neighborhood].copy()
     parsed = frame.lns_best_sod_by_second.map(json.loads)
     valid = parsed.map(len) > max(LNS_TIMES)
     frame, parsed = frame.loc[valid].copy(), parsed.loc[valid]
@@ -627,24 +571,6 @@ def _empirical_cdf(frame: pd.DataFrame, horizon: int) -> np.ndarray:
             survival *= 1 - events / at_risk
         values.append(1 - survival)
     return np.asarray(values)
-
-
-def _average_best_curve(frame: pd.DataFrame, horizon: int = 101) -> np.ndarray:
-    best_curves = []
-    group_columns = ["instance_id"]
-    if "lacam_seed" in frame:
-        group_columns.append("lacam_seed")
-    for _, rows in frame.groupby(group_columns):
-        curves = [
-            row.improvement_curve[:horizon]
-            for row in rows.itertuples()
-            if len(row.improvement_curve) >= horizon
-        ]
-        if len(curves) == len(NEIGHBOURHOOD_SIZES):
-            best_curves.append(np.max(curves, axis=0))
-    if not best_curves:
-        raise ValueError(f"No complete 0..{horizon - 1}-second LNS curves")
-    return np.maximum.accumulate(np.mean(best_curves, axis=0))
 
 
 def _allocation(current: dict[float, float], average, budget, future, limits):
