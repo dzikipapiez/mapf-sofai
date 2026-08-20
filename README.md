@@ -1,7 +1,6 @@
 # MAPF Anytime
 
-Code for dissertation experiments on combining fast and deliberative MAPF
-solvers.
+Code for dissertation on SOFAI-inspired metacognition for Anytime MAPF.
 
 ## Setup
 
@@ -32,8 +31,7 @@ scripts/build_native.sh .venv/bin/python
 ## Reproduction data
 
 The datasets, benchmark output, system results and generated instances are
-distributed in the [`data-v1` GitHub release](https://github.com/dzikipapiez/mapf-sofai/releases/tag/data-v1),
-rather than through Git. Download its assets into a temporary directory and
+distributed in the [`data-v1` GitHub release](https://github.com/dzikipapiez/mapf-sofai/releases/tag/data-v1). Download its assets into a temporary directory and
 install `zstd` (`brew install zstd` on macOS or `sudo apt-get install zstd` on
 Ubuntu/Debian).
 
