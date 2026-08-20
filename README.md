@@ -1,4 +1,4 @@
-# MAPF Anytime
+# MAPF Sofai
 
 Code for dissertation on SOFAI-inspired metacognition for Anytime MAPF.
 
