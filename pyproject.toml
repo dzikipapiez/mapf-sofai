@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mapf-anytime"
+version = "0.1.0"
+description = "Anytime MAPF experiments with LaCAM and MAPF-LNS"
+readme = "README.md"
+license = { file = "LICENSE" }
+requires-python = ">=3.10,<3.12"
+dependencies = [
+    "numpy>=1.23.2,<=1.23.5",
+    "pandas>=2.0,<3",
+    "scikit-learn>=1.3",
+    "xgboost>=2.0",
+]
+
+[project.optional-dependencies]
+build = ["cmake>=3.16", "pybind11>=2.11"]
+notebooks = ["jupyterlab>=4", "matplotlib>=3.7"]
+pogema = ["pogema>=1.2"]
+test = ["pytest>=7"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

@@ -1,0 +1,7 @@
+{
+  "name": "maze-32-32-2__high",
+  "map": "../maps/maze-32-32-2-processed.map",
+  "scenario": "maze-32-32-2__high.scen",
+  "agents": 200,
+  "lower_bound_soc": 10795
+}

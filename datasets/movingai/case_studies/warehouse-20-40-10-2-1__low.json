@@ -1,0 +1,7 @@
+{
+  "name": "warehouse-20-40-10-2-1__low",
+  "map": "../maps/warehouse-20-40-10-2-1-processed.map",
+  "scenario": "warehouse-20-40-10-2-1__low.scen",
+  "agents": 1130,
+  "lower_bound_soc": 188529
+}

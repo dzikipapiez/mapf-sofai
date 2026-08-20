@@ -1,0 +1,85 @@
+{
+  "dataset": "../datasets/movingai_final.csv",
+  "instance_list": "../datasets/movingai/instance_sets/layered_comprehensive.txt",
+  "repetitions": 3,
+  "seed": 1729,
+  "policies": [
+    {
+      "name": "layered_v1",
+      "prepare": {"split_seed": 42, "neighborhood_size": 4},
+      "runs": [
+        {"budget": 200}, {"budget": 400}, {"budget": 600},
+        {"budget": 800}, {"budget": 1000}, {"budget": 1200},
+        {"budget": 1400}, {"budget": 1600}, {"budget": 1800},
+        {"budget": 2000}, {"budget": 2500}, {"budget": 3000},
+        {"budget": 3500}, {"budget": 4000}, {"budget": 4500},
+        {"budget": 5000}, {"budget": 5500}, {"budget": 6000},
+        {"budget": 6500}, {"budget": 7000}, {"budget": 7500},
+        {"budget": 8000}, {"budget": 8500}, {"budget": 9000},
+        {"budget": 9500}, {"budget": 10000}, {"budget": 10500},
+        {"budget": 11000}, {"budget": 11500}, {"budget": 12000}
+      ]
+    },
+    {
+      "name": "layered_variable_neighbourhood_v1",
+      "prepare": {"split_seed": 42},
+      "runs": [
+        {"budget": 200}, {"budget": 400}, {"budget": 600},
+        {"budget": 800}, {"budget": 1000}, {"budget": 1200},
+        {"budget": 1400}, {"budget": 1600}, {"budget": 1800},
+        {"budget": 2000}, {"budget": 2500}, {"budget": 3000},
+        {"budget": 3500}, {"budget": 4000}, {"budget": 4500},
+        {"budget": 5000}, {"budget": 5500}, {"budget": 6000},
+        {"budget": 6500}, {"budget": 7000}, {"budget": 7500},
+        {"budget": 8000}, {"budget": 8500}, {"budget": 9000},
+        {"budget": 9500}, {"budget": 10000}, {"budget": 10500},
+        {"budget": 11000}, {"budget": 11500}, {"budget": 12000}
+      ]
+    },
+    {
+      "name": "lacam_lns",
+      "runs": [
+        {"budget": 200}, {"budget": 400}, {"budget": 600},
+        {"budget": 800}, {"budget": 1000}, {"budget": 1200},
+        {"budget": 1400}, {"budget": 1600}, {"budget": 1800},
+        {"budget": 2000}, {"budget": 2500}, {"budget": 3000},
+        {"budget": 3500}, {"budget": 4000}, {"budget": 4500},
+        {"budget": 5000}, {"budget": 5500}, {"budget": 6000},
+        {"budget": 6500}, {"budget": 7000}, {"budget": 7500},
+        {"budget": 8000}, {"budget": 8500}, {"budget": 9000},
+        {"budget": 9500}, {"budget": 10000}, {"budget": 10500},
+        {"budget": 11000}, {"budget": 11500}, {"budget": 12000}
+      ]
+    },
+    {
+      "name": "naive_budget",
+      "runs": [
+        {"budget": 200}, {"budget": 400}, {"budget": 600},
+        {"budget": 800}, {"budget": 1000}, {"budget": 1200},
+        {"budget": 1400}, {"budget": 1600}, {"budget": 1800},
+        {"budget": 2000}, {"budget": 2500}, {"budget": 3000},
+        {"budget": 3500}, {"budget": 4000}, {"budget": 4500},
+        {"budget": 5000}, {"budget": 5500}, {"budget": 6000},
+        {"budget": 6500}, {"budget": 7000}, {"budget": 7500},
+        {"budget": 8000}, {"budget": 8500}, {"budget": 9000},
+        {"budget": 9500}, {"budget": 10000}, {"budget": 10500},
+        {"budget": 11000}, {"budget": 11500}, {"budget": 12000}
+      ]
+    },
+    {
+      "name": "lacam_naive",
+      "runs": [
+        {"budget": 200}, {"budget": 400}, {"budget": 600},
+        {"budget": 800}, {"budget": 1000}, {"budget": 1200},
+        {"budget": 1400}, {"budget": 1600}, {"budget": 1800},
+        {"budget": 2000}, {"budget": 2500}, {"budget": 3000},
+        {"budget": 3500}, {"budget": 4000}, {"budget": 4500},
+        {"budget": 5000}, {"budget": 5500}, {"budget": 6000},
+        {"budget": 6500}, {"budget": 7000}, {"budget": 7500},
+        {"budget": 8000}, {"budget": 8500}, {"budget": 9000},
+        {"budget": 9500}, {"budget": 10000}, {"budget": 10500},
+        {"budget": 11000}, {"budget": 11500}, {"budget": 12000}
+      ]
+    }
+  ]
+}
