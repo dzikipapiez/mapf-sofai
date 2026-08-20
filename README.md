@@ -60,10 +60,9 @@ done
 The instance archive already contains the `datasets/` prefix, so it must be
 extracted from the repository root. It contains the 4,950 MovingAI and 4,959
 POGEMA manifests used here, their instance lists, and every referenced map and
-scenario. The four system-result files are the complete stitched learned and
-nonlearnable results, named as `training-dataset_evaluation-dataset`. The
+scenario. The four system experiment result files are named as `training-dataset_evaluation-dataset`. The
 system-analysis notebook selects one of these files through its `RESULTS`
-list. `SHA256SUMS` in the release can be used to verify every download.
+list. 
 
 ## Repository structure
 
